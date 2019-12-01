@@ -11,6 +11,6 @@
 
 
 (defexpect fuel-requirements-part-2
-  (expect (sut/fuel-requirements-2 1969) 966)
-  (expect (sut/fuel-requirements-2 100756) 50346))
+  (expect (sut/total-fuel-requirements 1969) 966)
+  (expect (sut/total-fuel-requirements 100756) 50346))
 
