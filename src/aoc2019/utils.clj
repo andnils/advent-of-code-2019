@@ -3,6 +3,12 @@
             [clojure.edn]))
 
 
+(defn abs
+  "Absolute value of `i`"
+  [^long i]
+  (Math/abs i))
+
+
 (def sum
   "Sum of numbers"
   (partial reduce +))
