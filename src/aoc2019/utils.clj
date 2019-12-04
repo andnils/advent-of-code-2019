@@ -8,6 +8,8 @@
   [^long i]
   (Math/abs i))
 
+(defn ->int [s]
+  (Integer/parseInt (str s)))
 
 (def sum
   "Sum of numbers"
