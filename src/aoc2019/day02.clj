@@ -10,58 +10,97 @@
 
 (def initial-memory (delay (read-edn-string "input02.txt")))
 
-(defn setup-memory [initial-memory a b]
-  (-> initial-memory
-      (assoc 1 a)
-      (assoc 2 b)
-      (int-array)))
+(defn setup-memory
+  ([initial-memory]
+   (int-array initial-memory))
+  ([initial-memory a b]
+   (-> initial-memory
+       (assoc 1 a)
+       (assoc 2 b)
+       (int-array))))
 
 
-;; Accessor functions for instructions
-
-(defn get-opcode [memory pointer]
-  (get memory pointer))
-
-(defn get-params [memory pointer]
+(defn get-params
+  "Extract n values from memory.
+  E.g. if n is 3 and pointer is 0, you'll get the values
+  from meory index 1, 2 and 3.
+  If n is 2 and pointer is 15, you'll get indexes 16 and 17."
+  [n memory pointer]
   ;;;; a bit ugly, but it seems to be the fastest way to get a slice of an array
-  (vec (Arrays/copyOfRange ^ints memory ^long (+ 1 pointer) ^long (+ 4 pointer))))
+  (vec (Arrays/copyOfRange ^ints memory ^long (+ 1 pointer) ^long (+ 1 n pointer))))
+
+
 
 (defn get-result [memory]
   (get memory 0))
 
+(defprotocol Instruction
+  (go! [this memory])
+  (halt? [this])
+  (op-code [this])
+  (parameters [this]))
 
-;; Implementation of instructions
+(defrecord AddInstruction [params]
+  Instruction
+  (go! [this memory]
+    (let [p1 (get params 0)
+          p2 (get params 1)
+          out (get params 2)]
+      (aset-int memory out
+                (+ (get memory p1)
+                   (get memory p2)))))
+  (halt? [this] false)
+  (op-code [this] 1)
+  (parameters [this] params))
 
-(defn add! [memory [param1 param2 out]]
-  (aset-int memory out
-            (+ (get memory param1)
-               (get memory param2))))
+(defrecord MultInstruction [params]
+  Instruction
+  (go! [this memory]
+    (let [p1 (get params 0)
+          p2 (get params 1)
+          out (get params 2)]
+      (aset-int memory out
+                (* (get memory p1)
+                   (get memory p2)))))
+  (halt? [this] false)
+  (op-code [this] 2)
+  (parameters [this] params))
 
-(defn mult! [memory [param1 param2 out]]
-  (aset-int memory out
-            (* (get memory param1)
-               (get memory param2))))
+(defrecord HaltInstruction []
+  Instruction
+  (go! [this memory])
+  (halt? [this] true)
+  (op-code [this] 99)
+  (parameters [this] []))
 
 
 
-;; Main program
 
-(defn run-instruction! [memory op-code params]
-  (case (int op-code)
-    1 (add! memory params)
-    2 (mult! memory params)
-    :no-op))
+(defmulti make-instruction
+  (fn [memory pointer]
+    (get memory pointer)))
+
+(defmethod make-instruction 1
+  [memory pointer]
+  (->AddInstruction (get-params 3 memory pointer)))
+
+(defmethod make-instruction 2
+  [memory pointer]
+  (->MultInstruction (get-params 3 memory pointer)))
+
+(defmethod make-instruction 99
+  [_ _]
+  (->HaltInstruction))
+
 
 (defn run-step
   ([memory]
    (run-step memory 0))
   ([memory pointer]
-   (let [op-code (get-opcode memory pointer)
-         params (get-params memory pointer)
-         next-pointer (+ pointer 4)]
-     (when (not= op-code 99)
-       (run-instruction! memory op-code params)
-       next-pointer))))
+   (let [instruction (make-instruction memory pointer)]
+     (when (not (halt? instruction))
+       (go! instruction memory)
+       (+ pointer (inc (count (parameters instruction))))))))
 
 (defn run-loop [memory]
   (loop [next-pointer (run-step memory)]
