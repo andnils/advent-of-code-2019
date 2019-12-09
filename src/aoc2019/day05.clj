@@ -5,6 +5,7 @@
 (set! *warn-on-reflection* true)
 
 
+(def ^:dynamic *input-instruction* 1)
 
 ;; Memory setup
 
@@ -81,9 +82,8 @@
 (defrecord InputInstruction [params modes]
   Instruction
   (go! [this memory]
-    (let [param (get params 0)
-          input 1]  ;; TODO: hard-coded input?!? is it always 1?!?!
-      (aset-int memory param input)))
+    (let [param (get params 0)]
+      (aset-int memory param *input-instruction*)))
   (halt? [this] false)
   (advance-pointer [this] (fn [ptr] (+ 2 ptr))))
 
@@ -94,6 +94,17 @@
       (println "Output: " (get memory param))))
   (halt? [this] false)
   (advance-pointer [this] (fn [ptr] (+ 2 ptr))))
+
+(defrecord JumpIfTrueInstruction [params modes]
+  Instruction
+  (go! [this memory]
+    )
+  (halt? [this] false)
+  (advance-pointer [this]
+    (let [param (get params 0)]
+      (if (zero? param)
+        identity
+        (fn [_] (modal-get mode memory param))))))
 
 (defrecord HaltInstruction []
   Instruction
@@ -171,13 +182,17 @@
 (defn part-1-solution []
   (run-loop (setup-memory @initial-memory)))
 
-
+(defn part-2-solution []
+  (binding [*input-instruction* 5]
+    (run-loop (setup-memory @initial-memory))))
 
 ;; =======
 
 (comment
 
-  (run-loop (setup-memory @initial-memory))
+  (part-1-solution)
+
+  (part-2-solution)
 
 
   )
