@@ -43,7 +43,7 @@
     (doseq [row (partition IMAGE-WIDTH image-data)]
       (println (-> (apply str row)
                    (str/replace #"0" " ")
-                   (str/replace #"1" "*"))))))
+                   (str/replace #"1" "#"))))))
 
 
 (comment
