@@ -8,7 +8,9 @@
 
 ;; Memory setup
 
-(def initial-memory (delay (read-edn-string "input02.txt")))
+(def initial-memory (delay (read-edn-string "input05.txt")))
+
+(take 10 @initial-memory)
 
 (defn setup-memory
   ([initial-memory]
@@ -34,59 +36,113 @@
 (defn get-result [memory]
   (get memory 0))
 
+(defn modal-get [mode memory param]
+  (case mode
+    :position-mode (get memory param)
+    :immediate-mode param))
+
+
+
 (defprotocol Instruction
   (go! [this memory])
   (halt? [this])
-  (op-code [this])
-  (parameters [this]))
+  (advance-pointer [this]))
 
-(defrecord AddInstruction [params]
+(defrecord AddInstruction [params modes]
   Instruction
   (go! [this memory]
     (let [p1 (get params 0)
+          m1 (nth modes 2)
           p2 (get params 1)
+          m2 (nth modes 1)
           out (get params 2)]
       (aset-int memory out
-                (+ (get memory p1)
-                   (get memory p2)))))
+                (+ (modal-get m1 memory p1)
+                   (modal-get m2 memory p2)))))
   (halt? [this] false)
-  (op-code [this] 1)
-  (parameters [this] params))
+  (advance-pointer [this] (fn [ptr] (+ 4 ptr))))
 
-(defrecord MultInstruction [params]
+(defrecord MultInstruction [params modes]
   Instruction
   (go! [this memory]
     (let [p1 (get params 0)
+          m1 (nth modes 2)
           p2 (get params 1)
+          m2 (nth modes 1)
           out (get params 2)]
       (aset-int memory out
-                (* (get memory p1)
-                   (get memory p2)))))
+                (* (modal-get m1 memory p1)
+                   (modal-get m2 memory p2)))))
   (halt? [this] false)
-  (op-code [this] 2)
-  (parameters [this] params))
+  (advance-pointer [this] (fn [ptr] (+ 4 ptr))))
+
+
+
+(defrecord InputInstruction [params modes]
+  Instruction
+  (go! [this memory]
+    (let [param (get params 0)
+          input 1]  ;; TODO: hard-coded input?!? is it always 1?!?!
+      (aset-int memory param input)))
+  (halt? [this] false)
+  (advance-pointer [this] (fn [ptr] (+ 2 ptr))))
+
+(defrecord OutputInstruction [params modes]
+  Instruction
+  (go! [this memory]
+    (let [param (get params 0)]
+      (println "Output: " (get memory param))))
+  (halt? [this] false)
+  (advance-pointer [this] (fn [ptr] (+ 2 ptr))))
 
 (defrecord HaltInstruction []
   Instruction
   (go! [this memory])
   (halt? [this] true)
-  (op-code [this] 99)
-  (parameters [this] []))
+  (advance-pointer [this] (fn [ptr] (+ 1 ptr))))
 
+
+
+(defrecord InstructionType [opcode modes])
+
+(defn parse-mode [mode]
+  (case mode
+    \0 :position-mode
+    \1 :immediate-mode))
+
+(defn parse-instruction [i]
+  (let [s (format "%05d" i)
+        opcode (Integer/parseInt (.substring s 3 5))
+        modes (mapv parse-mode (.substring s 0 3))]
+    (->InstructionType opcode modes)))
 
 
 
 (defmulti make-instruction
   (fn [memory pointer]
-    (get memory pointer)))
+    (-> (get memory pointer)
+        (parse-instruction)
+        :opcode)))
 
 (defmethod make-instruction 1
   [memory pointer]
-  (->AddInstruction (get-params 3 memory pointer)))
+  (->AddInstruction (get-params 3 memory pointer)
+                    (:modes (parse-instruction (get memory pointer)))))
 
 (defmethod make-instruction 2
   [memory pointer]
-  (->MultInstruction (get-params 3 memory pointer)))
+  (->MultInstruction (get-params 3 memory pointer)
+                     (:modes (parse-instruction (get memory pointer)))))
+
+(defmethod make-instruction 3
+  [memory pointer]
+  (->InputInstruction (get-params 1 memory pointer)
+                      (:modes (parse-instruction (get memory pointer)))))
+
+(defmethod make-instruction 4
+  [memory pointer]
+  (->OutputInstruction (get-params 1 memory pointer)
+                       (:modes (parse-instruction (get memory pointer)))))
 
 (defmethod make-instruction 99
   [_ _]
@@ -100,7 +156,7 @@
    (let [instruction (make-instruction memory pointer)]
      (when (not (halt? instruction))
        (go! instruction memory)
-       (+ pointer (inc (count (parameters instruction))))))))
+       ((advance-pointer instruction) pointer)))))
 
 (defn run-loop [memory]
   (loop [next-pointer (run-step memory)]
@@ -111,42 +167,18 @@
 
 
 
-;; Part 2
-
-(def MAGIC-NUMBER  19690720)
-
-
-(defn answer [noun verb]
-  (+ (* 100 noun) verb))
-
-(defn calculate [initial-memory promise noun verb]
-  (let [result (run-loop (setup-memory initial-memory noun verb))]
-    (when (= result MAGIC-NUMBER)
-      (deliver promise (answer noun verb)))))
-
-;; ========
 
 (defn part-1-solution []
-  (run-loop (setup-memory @initial-memory 12 2)))
+  (run-loop (setup-memory @initial-memory)))
 
 
-(defn part-2-solution []
-  (let [answer (promise)
-        memory @initial-memory]
-    (doseq [noun (range 100)
-            verb (range 100)]
-      (future (calculate memory answer noun verb)))
-    (deref answer)))
 
 ;; =======
 
 (comment
 
-  (part-1-solution)
-  ;; => 5482655
+  (run-loop (setup-memory @initial-memory))
 
-  (part-2-solution)
-;; => 4967  
 
   )
 
